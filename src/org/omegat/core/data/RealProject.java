@@ -46,6 +46,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -172,6 +173,8 @@ public class RealProject implements IProject {
 
     private DirectoryMonitor tmOtherLanguagesMonitor;
 
+    private DirectoryMonitor tmOtherLanguagesDirMonitor;
+
     /**
      * Indicates when there is an ongoing save event. Saving might take a while
      * during team sync: if a merge is required the save might be postponed
@@ -192,6 +195,11 @@ public class RealProject implements IProject {
      * Storage for all translation memories of translations to other languages.
      */
     private Map<Language, ProjectTMX> otherTargetLangTMs = new TreeMap<>();
+
+    /**
+     * Storage for all translation memories of translations to other languages.
+     */
+    private Map<String, Map.Entry<Language, ProjectTMX>> otherTargetLangTMsDirs = new TreeMap<>();
 
     protected ProjectTMX projectTMX;
 
@@ -231,7 +239,7 @@ public class RealProject implements IProject {
      * use project.
      *
      * @param props
-     *            project properties
+     *              project properties
      */
     public RealProject(final ProjectProperties props) {
         config = props;
@@ -528,6 +536,7 @@ public class RealProject implements IProject {
         flushProcessCache();
         tmMonitor.fin();
         tmOtherLanguagesMonitor.fin();
+        tmOtherLanguagesDirMonitor.fin();
         unlockProject();
         Log.logInfoRB("LOG_DATAENGINE_CLOSE");
     }
@@ -601,7 +610,7 @@ public class RealProject implements IProject {
      * post-processing commands.
      *
      * @param sourcePattern
-     *            The regexp of files to create
+     *                      The regexp of files to create
      * @throws Exception
      */
     public void compileProject(String sourcePattern) throws Exception {
@@ -614,9 +623,10 @@ public class RealProject implements IProject {
      * to commit target files.
      *
      * @param sourcePattern
-     *            The regexp of files to create
+     *                         The regexp of files to create
      * @param doPostProcessing
-     *            Whether or not we should perform external post-processing.
+     *                         Whether or not we should perform external
+     *                         post-processing.
      * @throws Exception
      */
     public void compileProject(String sourcePattern, boolean doPostProcessing) throws Exception {
@@ -628,11 +638,12 @@ public class RealProject implements IProject {
      * TM files.
      *
      * @param sourcePattern
-     *            The regexp of files to create
+     *                          The regexp of files to create
      * @param doPostProcessing
-     *            Whether or not we should perform external post-processing.
+     *                          Whether or not we should perform external
+     *                          post-processing.
      * @param commitTargetFiles
-     *            Whether or not we should commit target files
+     *                          Whether or not we should commit target files
      * @throws Exception
      */
     @Override
@@ -773,7 +784,7 @@ public class RealProject implements IProject {
      * Set up and execute the user-specified external command.
      * 
      * @param command
-     *            Command to execute
+     *                Command to execute
      */
     private void doExternalCommand(String command) {
 
@@ -1184,11 +1195,11 @@ public class RealProject implements IProject {
      * Create the given directory if it does not exist yet.
      *
      * @param dir
-     *            the directory path to create
+     *                the directory path to create
      * @param dirType
-     *            the directory name to show in IOException
+     *                the directory name to show in IOException
      * @throws IOException
-     *             when directory could not be created.
+     *                     when directory could not be created.
      */
     private void createDirectory(final String dir, final String dirType) throws IOException {
         File d = new File(dir);
@@ -1473,6 +1484,53 @@ public class RealProject implements IProject {
         });
         tmOtherLanguagesMonitor.checkChanges();
         tmOtherLanguagesMonitor.start();
+
+        // find other lang tmx in directories with source file name
+        // projectFilesList
+        // filePath
+        for (FileInfo fi : projectFilesList) {
+            String fileName = fi.filePath.substring(0, fi.filePath.lastIndexOf('.'));
+            String searchPath = config.getTMOtherLangRoot() + fileName;
+
+            File searchPathDir = new File(searchPath);
+            tmOtherLanguagesDirMonitor = new DirectoryMonitor(searchPathDir, file -> {
+                String name = file.getName();
+                if (!name.matches("[A-Z]{2}([_-][A-Z]{2})?([_-][a-zA-Z0-9]+)*\\.tmx")) {
+                    // not a TMX file in XX_XX.tmx format
+                    return;
+                }
+
+                Pattern pattern = Pattern.compile("([A-Z]{2})(_[A-Z]{2})?");
+                Matcher matcher = pattern.matcher(name);
+                matcher.find();
+
+                String countryCode = matcher.group(1);
+                String localityCode = matcher.group(2);
+                if (localityCode != null) {
+                    countryCode = countryCode + localityCode;
+                }
+
+                Language targetLanguage = new Language(countryCode);
+                // create new translation memories map
+                Map<String, Map.Entry<Language, ProjectTMX>> newOtherTargetLangTMs = new TreeMap<>(otherTargetLangTMsDirs);
+                if (file.exists()) {
+                    try {
+                        ProjectTMX newTMX = new ProjectTMX(config.getSourceLanguage(), targetLanguage,
+                                config.isSentenceSegmentingEnabled(), file, checkOrphanedCallback);
+                        newOtherTargetLangTMs.put(searchPath, new AbstractMap.SimpleImmutableEntry<>(targetLanguage, newTMX));
+                    } catch (Exception e) {
+                        String filename = file.getPath();
+                        Log.logErrorRB(e, "TF_TM_LOAD_ERROR", filename);
+                        Core.getMainWindow().displayErrorRB(e, "TF_TM_LOAD_ERROR", filename);
+                    }
+                } else {
+                    newOtherTargetLangTMs.remove(searchPath);
+                }
+                otherTargetLangTMsDirs = newOtherTargetLangTMs;
+            });
+            tmOtherLanguagesDirMonitor.checkChanges();
+            tmOtherLanguagesDirMonitor.start();
+        }
     }
 
     /**
@@ -1716,6 +1774,10 @@ public class RealProject implements IProject {
         return Collections.unmodifiableMap(otherTargetLangTMs);
     }
 
+    public Map<String, Map.Entry<Language, ProjectTMX>> getOtherTargetLanguageTMsDir() {
+        return Collections.unmodifiableMap(otherTargetLangTMsDirs);
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -1740,7 +1802,7 @@ public class RealProject implements IProject {
      * </ol>
      *
      * @param cmdLine
-     *            Tokenizer class specified on command line
+     *                Tokenizer class specified on command line
      * @return Tokenizer implementation
      */
     protected ITokenizer createTokenizer(String cmdLine, Class<?> projectPref) {
@@ -1821,7 +1883,7 @@ public class RealProject implements IProject {
      * any XML-unsafe chars.
      *
      * @param filename
-     *            filesystem's filename
+     *                 filesystem's filename
      * @return normalized filename
      */
     protected String patchFileNameForEntryKey(String filename) {

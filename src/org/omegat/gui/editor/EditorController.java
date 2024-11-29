@@ -671,6 +671,11 @@ public class EditorController implements IEditor {
             hasRTL = hasRTL || BiDiUtils.isRtl(entry.getKey().getLanguageCode().toLowerCase(Locale.ENGLISH));
         }
 
+        Map<String, Map.Entry<Language, ProjectTMX>> otherLanguageTMsDir = Core.getProject().getOtherTargetLanguageTMsDir();
+        for (Map.Entry<String, Map.Entry<Language, ProjectTMX>> entry : otherLanguageTMsDir.entrySet()) {
+            hasRTL = hasRTL || BiDiUtils.isRtl(entry.getValue().getKey().getLanguageCode().toLowerCase(Locale.ENGLISH));
+        }
+
         Document3 doc = new Document3(this);
 
         // Create all SegmentBuilders now...

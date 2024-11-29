@@ -117,6 +117,10 @@ public class NotLoadedProject implements IProject {
         return null;
     }
 
+    public Map<String, Map.Entry<Language, ProjectTMX>> getOtherTargetLanguageTMsDir() {
+        return null;
+    }
+
     public List<FileInfo> getProjectFiles() {
         return null;
     }

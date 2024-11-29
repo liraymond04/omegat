@@ -237,6 +237,13 @@ public interface IProject {
     Map<Language, ProjectTMX> getOtherTargetLanguageTMs();
 
     /**
+     * Get all translation memories from /other_lang/[current_source_filename] folder.
+     *
+     * @return translation memories
+     */
+    Map<String, Map.Entry<Language, ProjectTMX>> getOtherTargetLanguageTMsDir();
+
+    /**
      * Get info about each source file in project. It's unmodifiable list, so, there is no need
      * synchronization to read it.
      */

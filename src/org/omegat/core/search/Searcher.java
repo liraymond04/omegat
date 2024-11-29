@@ -368,6 +368,12 @@ public class Searcher {
                     searchEntries(tmEn.getValue().getAlternatives(), ENTRY_ORIGIN_ALTERNATIVE, langTM.getLanguage());
                     checkStop.checkInterrupted();
                 }
+                for (Map.Entry<String, Map.Entry<Language, ProjectTMX>> tmEn: m_project.getOtherTargetLanguageTMsDir().entrySet()) {
+                    final Language langTM = tmEn.getValue().getKey();
+                    searchEntries(tmEn.getValue().getValue().getDefaults(), ENTRY_ORIGIN_ALTERNATIVE, langTM.getLanguage());
+                    searchEntries(tmEn.getValue().getValue().getAlternatives(), ENTRY_ORIGIN_ALTERNATIVE, langTM.getLanguage());
+                    checkStop.checkInterrupted();
+                }
             }
         }
     }

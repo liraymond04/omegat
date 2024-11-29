@@ -33,7 +33,9 @@ package org.omegat.gui.editor;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.swing.text.AttributeSet;
@@ -299,6 +301,22 @@ public class SegmentBuilder {
             int prevOffset = offset;
             sourceText = addInactiveSegPart(true, ste.getSrcText());
 
+            Set<Language> addedLangs = new HashSet<>();
+
+            // check source file dirs first for more likely TMX ref matches
+            Map<String, Map.Entry<Language, ProjectTMX>> otherLanguageTMsDir = Core.getProject().getOtherTargetLanguageTMsDir();
+            for (Map.Entry<String, Map.Entry<Language, ProjectTMX>> entry : otherLanguageTMsDir.entrySet()) {
+                TMXEntry altTrans = entry.getValue().getValue().getMultipleTranslation(ste.getKey());
+                if (altTrans == null) {
+                    altTrans = entry.getValue().getValue().getDefaultTranslation(ste.getSrcText());
+                }
+                if (altTrans != null && altTrans.isTranslated()) {
+                    Language language = entry.getValue().getKey();
+                    addOtherLanguagePart(altTrans.translation, language);
+                    addedLangs.add(language);
+                }
+            }
+
             Map<Language, ProjectTMX> otherLanguageTMs = Core.getProject().getOtherTargetLanguageTMs();
             for (Map.Entry<Language, ProjectTMX> entry : otherLanguageTMs.entrySet()) {
                 TMXEntry altTrans = entry.getValue().getMultipleTranslation(ste.getKey());
@@ -307,7 +325,9 @@ public class SegmentBuilder {
                 }
                 if (altTrans != null && altTrans.isTranslated()) {
                     Language language = entry.getKey();
-                    addOtherLanguagePart(altTrans.translation, language);
+                    if (!addedLangs.contains(language)) {
+                        addOtherLanguagePart(altTrans.translation, language);
+                    }
                 }
             }
 
